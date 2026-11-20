@@ -267,6 +267,41 @@ def save_experiment(output_dir, config, results, summary):
 
     print(f"实验结果已保存到：{output_path}")
 
+def load_experiment(output_dir):
+    """
+    从文件中读取一次已经保存的实验。
+    """
+    output_path = Path(output_dir)
+
+    experiment_path = output_path / "experiment.json"
+    episodes_path = output_path / "episodes.json"
+    summary_path = output_path / "summary.csv"
+
+    with experiment_path.open(
+        "r",
+        encoding="utf-8",
+    ) as file:
+        config = json.load(file)
+
+    with episodes_path.open(
+        "r",
+        encoding="utf-8",
+    ) as file:
+        results = json.load(file)
+
+    with summary_path.open(
+        "r",
+        newline="",
+        encoding="utf-8-sig",
+    ) as file:
+        reader = csv.DictReader(file)   #reader读了第一行，即表头 #csv.DictReader 会自动把 CSV 文件的第一行（也就是表头）作为字典的“键（Key）”，把后续每一行的数据作为“值（Value）”
+        saved_summary = next(reader)    #让读取器往下读一行数据，并把它变成一个 Python 字典，赋值给 saved_summary
+    # json.load(file) 将 JSON 文件恢复成 Python 字典或列表；
+    # csv.DictReader(file) 将 CSV 的一行读取成字典；
+    # CSV 中的数据默认都是字符串，所以后面需要用 int() 或 float() 转换
+
+    return config, results, saved_summary
+
 def main():
     start = {"x": 0, "y": 0}
     goal = {"x": 3, "y": 2}
@@ -317,6 +352,8 @@ def main():
             results=results,
             summary=summary,
         )
+
+
 
         print(f"策略：{policy.__name__}")
         print(f"实验回合数：{summary['episodes']}")
