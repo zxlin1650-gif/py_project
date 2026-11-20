@@ -71,7 +71,7 @@ def run_episode(start, goal, width, height, policy, seed, max_steps):
         width (int): 棋盘格宽度
         height (int): 棋盘格高度
         policy (function): 策略名称
-        seed (_type_): 随机数生成器的初始起点，若为None默认使用当前系统时间作为种子
+        seed (_type_): 随机数生成器的初始起点，若为None默认使用当前系统时间作为种子。可以是任何可哈希（hashable）的对象，通常用 32 位整数
         max_steps (int): 避免程序卡死的最大步数
     """
     if max_steps <1:
@@ -108,41 +108,135 @@ def run_episode(start, goal, width, height, policy, seed, max_steps):
         "final_distance": final_distance,
         "trajectory": trajectory,
     }
+
+def run_experiment(
+    start,
+    goal,
+    width,
+    height,
+    policy,
+    episodes,
+    seed,
+    max_steps,
+):
+    """使用同一个策略运行多个回合。
+        episodes (int): 执行的回合数
+    """
+    if episodes < 1:
+        raise ValueError("episodes 必须是正整数")
+
+    results = []
+
+    for episode_index in range(episodes):
+        episode_seed = seed + episode_index      #每个随机策略回合会有不同的随机动作，但整个实验仍然可以重复
+
+        result = run_episode(
+            start=start,
+            goal=goal,
+            width=width,
+            height=height,
+            policy=policy,
+            seed=episode_seed,
+            max_steps=max_steps,
+        )
+
+        result["episode"] = episode_index
+        results.append(result)
+
+    return results
+
+def summarize_results(results):
+     """
+     根据多个回合的结果计算统计指标。
+     """
+     if not results:
+         raise ValueError("results 不能为空")
+
+     successful_results = [
+         result for result in results
+         if result["success"]
+    ]
+
+     total_episodes = len(results)
+     success_count = len(successful_results)
+
+     average_steps = (
+         sum(result["steps"] for result in results)
+         / total_episodes
+     )
+
+     average_final_distance = (
+         sum(result["final_distance"] for result in results)
+         / total_episodes
+     )
+
+     if successful_results:
+         successful_average_steps = (
+             sum(result["steps"] for result in successful_results)
+             / len(successful_results)
+         )
+     else:
+         successful_average_steps = None
+ 
+     return {
+         "episodes": total_episodes,
+         "successes": success_count,
+         "success_rate": success_count / total_episodes,
+         "average_steps": average_steps,
+         "average_final_distance": average_final_distance,
+         "successful_average_steps": successful_average_steps,
+         "shortest_steps": min(
+             result["steps"] for result in results
+         ),
+         "longest_steps": max(
+             result["steps"] for result in results
+         ),
+     }
     
 def main():
-    width = 7
-    height = 7
-
     start = {"x": 0, "y": 0}
     goal = {"x": 3, "y": 2}
 
-    greedy_result = run_episode(
-        start=start,
-        goal=goal,
-        width=width,
-        height=height,
-        policy=greedy_policy,
-        seed=1,
-        max_steps=30,
-    )
+    width = 7
+    height = 7
+    episodes = 20
+    seed = 0
+    max_steps = 30
 
-    random_result = run_episode(
-        start=start,
-        goal=goal,
-        width=width,
-        height=height,
-        policy=random_policy,
-        seed=1,
-        max_steps=30,
-    )
+    policies = [
+        greedy_policy,
+        random_policy,
+    ]
 
-    for result in [greedy_result, random_result]:
-        print(f"策略：{result['policy']}")
-        print(f"随机种子：{result['seed']}")
-        print(f"是否成功：{result['success']}")
-        print(f"执行步数：{result['steps']}")
-        print(f"最终距离：{result['final_distance']:.2f}")
-        print(f"轨迹：{result['trajectory']}")
+    for policy in policies:
+        results = run_experiment(
+            start=start,
+            goal=goal,
+            width=width,
+            height=height,
+            policy=policy,
+            episodes=episodes,
+            seed=seed,
+            max_steps=max_steps,
+        )
+
+        summary = summarize_results(results)
+
+        print(f"策略：{policy.__name__}")
+        print(f"实验回合数：{summary['episodes']}")
+        print(f"成功回合数：{summary['successes']}")
+        print(f"成功率：{summary['success_rate']:.2%}")
+        print(f"平均步数：{summary['average_steps']:.2f}")
+        print(
+            "成功回合平均步数："
+            f"{summary['successful_average_steps']}"
+        )
+        print(
+            "平均最终距离："
+            f"{summary['average_final_distance']:.2f}"
+        )
+        print(f"最短步数：{summary['shortest_steps']}")
+        print(f"最长步数：{summary['longest_steps']}")
         print()
 
 if __name__ == "__main__":
