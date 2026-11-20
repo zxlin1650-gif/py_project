@@ -1,5 +1,8 @@
 import math
 import random
+import json    #保存完整实验数据
+import csv     #保存表格形式的统计结果
+from pathlib import Path   #跨平台处理文件夹和文件路径
 
 def distance(x1, y1, x2, y2):
     """计算两个二维点之间的直线距离。"""
@@ -192,7 +195,78 @@ def summarize_results(results):
              result["steps"] for result in results
          ),
      }
+
+def save_experiment(output_dir, config, results, summary):
+    """
+    保存一次实验的配置、每回合结果和汇总指标。
+    output_dir(str): 保存结果的文件夹路径（字符串或 Path 对象）
+    config:实验的配置信息
+    """
+    output_path = Path(output_dir)      #使用 pathlib 库中的 Path 将传入的字符串路径转化为路径对象。这样做的好处是跨平台兼容性更好，并且可以使用 / 符号来拼接路径（比直接字符串拼接更优雅、更安全）。
+
+    # 如果文件夹不存在，就自动创建
+    output_path.mkdir(parents=True, exist_ok=True)
+    #parents=True：如果父目录不存在，会自动递归创建（比如 output_dir="results/run_1"，如果 results 也没有，会一并创建）。
+    #exist_ok=True：如果文件夹已经存在，不要报错，直接跳过。
     
+    # 保存实验配置(使用 / 符号拼接路径)
+    experiment_path = output_path / "experiment.json"
+
+    with experiment_path.open("w", encoding="utf-8") as file:
+        json.dump(
+            config,
+            file,   #就是with ... as file中的file
+            ensure_ascii=False,
+            indent=2,
+        )
+    # with ... as file:：使用上下文管理器打开文件。这样在缩进块执行完毕后，文件会自动关闭，不用担心忘记关文件导致内存泄漏。
+    # "w"：写入模式（Write）。如果文件存在会被覆盖。
+    # encoding="utf-8"：指定编码为 utf-8，防止中文（如果 config 里有中文）乱码。
+    # json.dump()：将 Python 字典（config）序列化为 JSON 字符串并写入 file。
+    # ensure_ascii=False：非常重要！如果不加这个，中文会被转成 \uXXXX 的 Unicode 编码，加上之后就能原样保留中文，方便人直接阅读。
+    # indent=2：让生成的 JSON 文件有 2 个空格的缩进，排版美观，方便人类阅读。
+
+    # 保存每个回合的完整结果
+    episodes_path = output_path / "episodes.json"
+
+    with episodes_path.open("w", encoding="utf-8") as file:
+        json.dump(
+            results,
+            file,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    # 保存汇总统计
+    summary_path = output_path / "summary.csv"
+
+    #定义表头（summary 字典里的键必须和这些列名对应）
+    fieldnames = [
+        "episodes",
+        "successes",
+        "success_rate",
+        "average_steps",
+        "average_final_distance",
+        "successful_average_steps",
+        "shortest_steps",
+        "longest_steps",
+    ]
+
+    with summary_path.open(
+        "w",
+        newline="",     #在写入 CSV 时，必须加上这个参数。否则在 Windows 系统上，CSV 的每一行之间会多出一个空行。
+        encoding="utf-8-sig",    #加上 -sig，Excel 就能完美识别中文
+    ) as file:
+        writer = csv.DictWriter(
+            file,
+            fieldnames=fieldnames,
+        )  #创建一个 CSV 写入器。csv.DictWriter：专门用于写入字典格式的数据。它会自动按照 fieldnames 的顺序，把字典里的值填入对应的列中。
+
+        writer.writeheader()    #把前面定义的 fieldnames 作为第一行写入文件
+        writer.writerow(summary)   #把 summary 字典里的值，按照表头的顺序，作为第二行写入
+
+    print(f"实验结果已保存到：{output_path}")
+
 def main():
     start = {"x": 0, "y": 0}
     goal = {"x": 3, "y": 2}
@@ -221,6 +295,28 @@ def main():
         )
 
         summary = summarize_results(results)
+        config = {
+            "start": start,
+            "goal": goal,
+            "width": width,
+            "height": height,
+            "policy": policy.__name__,
+            "episodes": episodes,
+            "seed": seed,
+            "max_steps": max_steps,
+        }
+
+        output_dir = (
+            Path("runs")
+            / f"{policy.__name__}_seed{seed}"
+        )
+
+        save_experiment(
+            output_dir=output_dir,
+            config=config,
+            results=results,
+            summary=summary,
+        )
 
         print(f"策略：{policy.__name__}")
         print(f"实验回合数：{summary['episodes']}")
@@ -238,6 +334,7 @@ def main():
         print(f"最短步数：{summary['shortest_steps']}")
         print(f"最长步数：{summary['longest_steps']}")
         print()
+        #在终端输入dir runs /s可以递归地（包括所有子文件夹）列出 runs 文件夹下的所有文件和目录
 
 if __name__ == "__main__":
     main()
