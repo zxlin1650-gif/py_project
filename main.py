@@ -3,6 +3,7 @@ import random
 import json    #保存完整实验数据
 import csv     #保存表格形式的统计结果
 from pathlib import Path   #跨平台处理文件夹和文件路径
+import argparse         #Python 标准库中专门读取命令行参数的模块  #arg表示argument，是实参。而parameter是实参  #parse是解析的意思，parser解析器
 
 def distance(x1, y1, x2, y2):
     """计算两个二维点之间的直线距离。"""
@@ -302,20 +303,66 @@ def load_experiment(output_dir):
 
     return config, results, saved_summary
 
+def parse_args():
+    parser = argparse.ArgumentParser(     #ArgumentParser 是模块里的一个类
+        description="二维点质量轨迹仿真与实验分析工具"
+    )
+
+    parser.add_argument(
+        "--episodes",  #参数名
+        type=int,      #可选关键字参数  #键入默认str，这里转成int
+        default=20,
+        help="实验回合数，默认是 20",  #帮助说明
+    )
+
+    parser.add_argument(
+        "--policy",
+        choices=["greedy", "random", "both"],
+        default="both",
+        help="选择策略，默认运行两种策略",
+    )
+
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="随机种子，默认是 0",
+    )
+
+    parser.add_argument(
+        "--max-steps",
+        dest="max_steps",    #参数名带连字符，要手动指定变量名
+        type=int,
+        default=30,
+        help="每个回合的最大步数，默认是 30",
+    )
+
+    parser.add_argument(
+        "--output",
+        default="runs",
+        help="实验结果保存目录，默认是 runs",
+    )
+
+    return parser.parse_args()   #parse_args()是ArgumentParser实例的方法，作用：读取命令行参数，按 add_argument 登记的规则，把字符串校验、转换，生成并返回一个 Namespace 对象，如Namespace(episodes=50, policy='greedy', seed=0, max_steps=30, output='runs')
+
 def main():
+    args = parse_args()
+
     start = {"x": 0, "y": 0}
     goal = {"x": 3, "y": 2}
 
     width = 7
     height = 7
-    episodes = 20
-    seed = 0
-    max_steps = 30
 
-    policies = [
-        greedy_policy,
-        random_policy,
-    ]
+    if args.policy == "greedy":
+        policies = [greedy_policy]
+    elif args.policy == "random":
+        policies = [random_policy]
+    else:
+        policies = [
+            greedy_policy,
+            random_policy,
+        ]
 
     for policy in policies:
         results = run_experiment(
@@ -324,27 +371,31 @@ def main():
             width=width,
             height=height,
             policy=policy,
-            episodes=episodes,
-            seed=seed,
-            max_steps=max_steps,
+            episodes=args.episodes,
+            seed=args.seed,
+            max_steps=args.max_steps,
         )
 
         summary = summarize_results(results)
+
         config = {
             "start": start,
             "goal": goal,
             "width": width,
             "height": height,
             "policy": policy.__name__,
-            "episodes": episodes,
-            "seed": seed,
-            "max_steps": max_steps,
+            "episodes": args.episodes,
+            "seed": args.seed,
+            "max_steps": args.max_steps,
         }
 
-        output_dir = (
-            Path("runs")
-            / f"{policy.__name__}_seed{seed}"
-        )
+        if args.policy == "both":
+            output_dir = (
+                Path(args.output)
+                / f"{policy.__name__}_seed{args.seed}"
+            )
+        else:
+            output_dir = Path(args.output)
 
         save_experiment(
             output_dir=output_dir,
@@ -352,8 +403,6 @@ def main():
             results=results,
             summary=summary,
         )
-
-
 
         print(f"策略：{policy.__name__}")
         print(f"实验回合数：{summary['episodes']}")
@@ -371,7 +420,6 @@ def main():
         print(f"最短步数：{summary['shortest_steps']}")
         print(f"最长步数：{summary['longest_steps']}")
         print()
-        #在终端输入dir runs /s可以递归地（包括所有子文件夹）列出 runs 文件夹下的所有文件和目录
 
 if __name__ == "__main__":
     main()
